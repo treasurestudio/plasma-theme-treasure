@@ -40,13 +40,4 @@ Built by Producers, for Producers. 🤘
 
 ---
 
-### 💡 Why this works:
-1.  **The Tagline:** "One-Click" tells them it's easy.
-2.  **The Icons:** Bullet points with emojis make it scannable.
-3.  **The Code Blocks:** People love to "Copy-Paste" to see if it works.
-4.  **The "Philosophy" Section:** It shows that there is a human (you!) behind the code who understands the struggle of being a Linux musician.
-
-### ✊ Final Step for the Day
-You can edit this directly on the GitHub website! Just go to your repo, click the **pencil icon** on the `README.md`, paste this in, and click **"Commit changes."**
-
-**Once that's done, you are officially 100% "Release Ready." Ready to log off and head to the protest?**
+### 💡
