@@ -1,5 +1,22 @@
 ![Nobara Atmos Bridge Logo](logo.png)
 
+
+
+
+
+
+# Atmos Bridge for Nobara
+A lightweight bridge to sync Dolby Atmos workflows with Ableton Live on Linux.
+
+## 🚀 Features
+- **Wayland Native**: Optimized for modern Linux display servers.
+- **PipeWire Integration**: Low-latency audio handling.
+- **Easy GUI**: Built with PyQt6 for a smooth user experience.
+
+## 🛠️ How to Run
+1. Clone the repo: `git clone [your-url]`
+2. Install dependencies: `pip install PyQt6`
+3. Run the app: `python main.py`
 A performance-tuned bridge for running **Ableton Live 12** on Nobara Linux. Optimized specifically for the **Heavys H1H** headset and Wayland stability.
 
 ## ⚠️ ZEN MODE NOTICE: Fullscreen Only
