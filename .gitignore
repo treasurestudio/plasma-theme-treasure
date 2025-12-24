@@ -1,16 +1,2 @@
-# Python junk
 __pycache__/
-*.py[cod]
-*$py.class
-
-# Environment-specific
-.venv/
-env/
-
-# User-specific config (Don't leak your file paths!)
-config/*.json
-~/.config/nobara-atmos.json
-
-# System junk
-.DS_Store
-*.log
+.atmos_bridge_path

@@ -1,81 +1,94 @@
 import sys
 import os
 import subprocess
-from PyQt6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QLabel, QPushButton
-from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtGui import QIcon, QPixmap
+from pathlib import Path
+from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout,
+                             QPushButton, QLabel, QFileDialog, QStyle)
 
-class AtmosBridgeUI(QMainWindow):
+class AtmosBridge(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("ATMOS BRIDGE")
-        self.script_dir = os.path.dirname(os.path.abspath(__file__))
-        
-        # Comprehensive search for the logo
-        search_paths = [
-            os.path.join(self.script_dir, "logo.png"),
-            os.path.join(self.script_dir, "assets", "logo.png"),
-            os.path.expanduser("~/Desktop/nobara-atmos-bridge/logo.png")
-        ]
-        
-        self.logo_path = next((p for p in search_paths if os.path.exists(p)), None)
-        self.ableton_exe = "/home/john/.wine/drive_c/Program Files/Common Files/Live 12 Lite/Program/Live.exe"
-        
-        self.showMaximized()
+        self.config_path = Path.home() / ".atmos_bridge_path"
+        self.init_ui()
+        self.auto_discover()
+
+    def init_ui(self):
+        self.setWindowTitle('Atmos Bridge v1.0')
+        self.setMinimumSize(450, 200)
+
         layout = QVBoxLayout()
-        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        self.logo_label = QLabel()
-        if self.logo_path:
-            pixmap = QPixmap(self.logo_path)
-            self.logo_label.setPixmap(pixmap.scaled(600, 600, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
-            self.setWindowIcon(QIcon(self.logo_path))
+        self.status_label = QLabel("Status: Ready")
+        self.path_label = QLabel("No path detected.")
+        self.path_label.setWordWrap(True)
+        self.path_label.setStyleSheet("color: #777; font-size: 11px;")
+
+        self.launch_btn = QPushButton(" Launch Ableton Bridge")
+        self.launch_btn.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPlay))
+        self.launch_btn.setMinimumHeight(50)
+        self.launch_btn.clicked.connect(self.launch_app)
+
+        self.browse_btn = QPushButton("Change Ableton Path")
+        self.browse_btn.clicked.connect(self.manual_browse)
+
+        layout.addWidget(QLabel("<b>Atmos Bridge Control</b>"))
+        layout.addWidget(self.status_label)
+        layout.addWidget(self.path_label)
+        layout.addStretch()
+        layout.addWidget(self.launch_btn)
+        layout.addWidget(self.browse_btn)
+        self.setLayout(layout)
+
+    def auto_discover(self):
+        """Logic to find the EXE without user input."""
+        # Check saved config first
+        if self.config_path.exists():
+            saved = self.config_path.read_text().strip()
+            if os.path.exists(saved):
+                self.set_path(saved)
+                return
+
+        # Common Wine/Nobara install locations
+        search_dirs = [
+            Path.home() / ".wine/drive_c/Program Files",
+            Path.home() / ".wine/drive_c/Program Files (x86)",
+            Path.home() / ".wine/drive_c/Program Files/Common Files"
+        ]
+
+        for s_dir in search_dirs:
+            if s_dir.exists():
+                # Glob search for the actual binary
+                matches = list(s_dir.rglob("Live.exe"))
+                if matches:
+                    self.set_path(str(matches[0]))
+                    return
+
+    def set_path(self, path):
+        self.current_path = path
+        self.path_label.setText(f"Target: {path}")
+        self.status_label.setText("Status: Ableton Found")
+
+    def manual_browse(self):
+        file, _ = QFileDialog.getOpenFileName(self, "Find Live.exe", str(Path.home()), "Executables (*.exe)")
+        if file:
+            self.set_path(file)
+            self.config_path.write_text(file)
+
+    def launch_app(self):
+        if hasattr(self, 'current_path') and os.path.exists(self.current_path):
+            self.status_label.setText("Status: Launching Wine...")
+            # Use proper subprocess handling
+            subprocess.Popen(["wine", self.current_path],
+                             env=os.environ.copy(),
+                             stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL)
         else:
-            self.logo_label.setText("⚠️ LOGO.PNG NOT FOUND\nPlace it in: ~/Desktop/nobara-atmos-bridge/")
-            self.logo_label.setStyleSheet("color: yellow; font-size: 25px; border: 2px dashed yellow; padding: 30px;")
-        
-        layout.addWidget(self.logo_label, alignment=Qt.AlignmentFlag.AlignCenter)
+            self.status_label.setText("Status: Error - Path not set")
 
-        self.status_label = QLabel("○ READY")
-        self.status_label.setStyleSheet("font-size: 50px; font-weight: bold; color: #4CAF50; margin: 30px;")
-        layout.addWidget(self.status_label, alignment=Qt.AlignmentFlag.AlignCenter)
-
-        self.run_btn = QPushButton("🚀 LAUNCH ABLETON")
-        self.run_btn.setFixedSize(500, 120)
-        self.run_btn.setStyleSheet("background-color: #2e7d32; color: white; font-weight: bold; font-size: 30px; border-radius: 20px;")
-        self.run_btn.clicked.connect(self.launch_ableton)
-        layout.addWidget(self.run_btn, alignment=Qt.AlignmentFlag.AlignCenter)
-
-        container = QWidget()
-        container.setLayout(layout)
-        container.setStyleSheet("background-color: #000000;") 
-        self.setCentralWidget(container)
-
-        self.timer = QTimer()
-        self.timer.timeout.connect(self.update_status)
-        self.timer.start(1000)
-
-    def update_status(self):
-        try:
-            output = subprocess.check_output("ps -aux | grep -iE 'Live|Ableton'", shell=True)
-            is_running = len([line for line in output.splitlines() if b"grep" not in line]) > 0
-        except: is_running = False
-        
-        if is_running:
-            self.status_label.setText("● ATMOS LINK ACTIVE")
-            self.status_label.setStyleSheet("font-size: 50px; font-weight: bold; color: #e0b0ff; background-color: #2a0a4d; padding: 30px; border-radius: 20px; border: 3px solid #8a2be2;")
-            self.run_btn.hide()
-        else:
-            self.status_label.setText("○ READY")
-            self.status_label.setStyleSheet("font-size: 50px; font-weight: bold; color: #4CAF50;")
-            self.run_btn.show()
-
-    def launch_ableton(self):
-        wdir = os.path.dirname(self.ableton_exe)
-        subprocess.Popen(["wine", self.ableton_exe], cwd=wdir)
-
-if __name__ == "__main__":
+if __name__ == '__main__':
     app = QApplication(sys.argv)
-    window = AtmosBridgeUI()
-    window.show()
+    # Set a cleaner theme style
+    app.setStyle('Fusion')
+    gui = AtmosBridge()
+    gui.show()
     sys.exit(app.exec())
