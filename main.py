@@ -1,94 +1,113 @@
-import sys
 import os
 import subprocess
-from pathlib import Path
-from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout,
-                             QPushButton, QLabel, QFileDialog, QStyle)
+import time
+import sys
+import shutil
+import json
 
-class AtmosBridge(QWidget):
-    def __init__(self):
-        super().__init__()
-        self.config_path = Path.home() / ".atmos_bridge_path"
-        self.init_ui()
-        self.auto_discover()
+# --- PATHS & ENVIRONMENT ---
+CURRENT_DIR = os.path.dirname(os.path.realpath(__file__))
+HOME = os.path.expanduser("~")
+CONFIG_FILE = os.path.join(CURRENT_DIR, "config.json")
+ATMOS_ENGINE = os.path.join(CURRENT_DIR, "engine.py")
+WINE_CMD = shutil.which("wine") or "/usr/bin/wine"
+DEFAULT_DLL_PATH = "/usr/lib/wine/x86_64-windows/wineasio.dll"
 
-    def init_ui(self):
-        self.setWindowTitle('Atmos Bridge v1.0')
-        self.setMinimumSize(450, 200)
+def setup_environment():
+    """Sets the specific environment variables for 7.1 Atmos Routing."""
+    env = os.environ.copy()
+    env["PYTHONPATH"] = CURRENT_DIR
+    env["WINEASIO_NUMBER_OUTPUTS"] = "8"
+    env["WINEASIO_NUMBER_INPUTS"] = "0"
+    env["WINEASIO_AUTOSTART_SERVER"] = "on"
+    env["PIPEWIRE_LATENCY"] = "256/48000"
+    return env
 
-        layout = QVBoxLayout()
-
-        self.status_label = QLabel("Status: Ready")
-        self.path_label = QLabel("No path detected.")
-        self.path_label.setWordWrap(True)
-        self.path_label.setStyleSheet("color: #777; font-size: 11px;")
-
-        self.launch_btn = QPushButton(" Launch Ableton Bridge")
-        self.launch_btn.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPlay))
-        self.launch_btn.setMinimumHeight(50)
-        self.launch_btn.clicked.connect(self.launch_app)
-
-        self.browse_btn = QPushButton("Change Ableton Path")
-        self.browse_btn.clicked.connect(self.manual_browse)
-
-        layout.addWidget(QLabel("<b>Atmos Bridge Control</b>"))
-        layout.addWidget(self.status_label)
-        layout.addWidget(self.path_label)
-        layout.addStretch()
-        layout.addWidget(self.launch_btn)
-        layout.addWidget(self.browse_btn)
-        self.setLayout(layout)
-
-    def auto_discover(self):
-        """Logic to find the EXE without user input."""
-        # Check saved config first
-        if self.config_path.exists():
-            saved = self.config_path.read_text().strip()
-            if os.path.exists(saved):
-                self.set_path(saved)
-                return
-
-        # Common Wine/Nobara install locations
-        search_dirs = [
-            Path.home() / ".wine/drive_c/Program Files",
-            Path.home() / ".wine/drive_c/Program Files (x86)",
-            Path.home() / ".wine/drive_c/Program Files/Common Files"
+def load_apps():
+    """Loads apps. If config is missing, it creates a high-quality default."""
+    defaults = {
+        "apps": [
+            {"name": "FL Studio 20", "exec": os.path.join(HOME, ".wine/drive_c/Program Files/Image-Line/FL Studio 20/FL64.exe"), "type": "wine"},
+            {"name": "Bitwig Studio", "exec": "bitwig-studio", "type": "native"},
+            {"name": "Ableton Live 11", "exec": os.path.join(HOME, ".wine/drive_c/Program Files/Ableton/Live 11 Suite/Program/Ableton Live 11 Suite.exe"), "type": "wine"},
+            {"name": "Spotify (Atmos Test)", "exec": "spotify", "type": "native"}
         ]
+    }
 
-        for s_dir in search_dirs:
-            if s_dir.exists():
-                # Glob search for the actual binary
-                matches = list(s_dir.rglob("Live.exe"))
-                if matches:
-                    self.set_path(str(matches[0]))
-                    return
+    if not os.path.exists(CONFIG_FILE):
+        with open(CONFIG_FILE, "w") as f:
+            json.dump(defaults, f, indent=4)
+        return defaults["apps"]
 
-    def set_path(self, path):
-        self.current_path = path
-        self.path_label.setText(f"Target: {path}")
-        self.status_label.setText("Status: Ableton Found")
+    try:
+        with open(CONFIG_FILE, "r") as f:
+            data = json.load(f)
+            return data.get("apps", defaults["apps"])
+    except:
+        return defaults["apps"]
 
-    def manual_browse(self):
-        file, _ = QFileDialog.getOpenFileName(self, "Find Live.exe", str(Path.home()), "Executables (*.exe)")
-        if file:
-            self.set_path(file)
-            self.config_path.write_text(file)
+def get_visual_selection(apps):
+    """Creates a professional GTK dropdown list."""
+    list_items = []
+    for i, app in enumerate(apps, 1):
+        # Check if the app actually exists so the user knows what will work
+        exists = "READY" if app["type"] == "native" or os.path.exists(app["exec"]) else "NOT FOUND"
+        list_items.extend([str(i), app['name'], app['type'].upper(), exists])
 
-    def launch_app(self):
-        if hasattr(self, 'current_path') and os.path.exists(self.current_path):
-            self.status_label.setText("Status: Launching Wine...")
-            # Use proper subprocess handling
-            subprocess.Popen(["wine", self.current_path],
-                             env=os.environ.copy(),
-                             stdout=subprocess.DEVNULL,
-                             stderr=subprocess.DEVNULL)
-        else:
-            self.status_label.setText("Status: Error - Path not set")
+    # Zenity command for a clean, professional table
+    cmd = [
+        "zenity", "--list", "--title=ATMOS MUSIC HUB v1.0",
+        "--column=ID", "--column=Software", "--column=Engine", "--column=Status",
+        "--text=Select Audio Host for 7.1 Atmos Bridging:",
+        "--height=400", "--width=500", "--hide-column=1"
+    ] + list_items
 
-if __name__ == '__main__':
-    app = QApplication(sys.argv)
-    # Set a cleaner theme style
-    app.setStyle('Fusion')
-    gui = AtmosBridge()
-    gui.show()
-    sys.exit(app.exec())
+    try:
+        selection = subprocess.check_output(cmd).decode().strip()
+        return int(selection) - 1
+    except:
+        return None
+
+def launch_hub():
+    # 1. Clear any old ghost processes first
+    os.system("killall -9 python3 engine.py 2>/dev/null")
+
+    apps = load_apps()
+    env = setup_environment()
+
+    # 2. Register WineASIO (Crucial for the 8-channel output)
+    if os.path.exists(DEFAULT_DLL_PATH):
+        subprocess.run([WINE_CMD, "regsvr32", "/s", DEFAULT_DLL_PATH], env=env)
+
+    # 3. Start the Atmos Engine
+    if not os.path.exists(ATMOS_ENGINE):
+        print(f"Error: {ATMOS_ENGINE} not found.")
+        return
+
+    print("🚀 Initializing Atmos Routing Engine...")
+    bridge_proc = subprocess.Popen([sys.executable, ATMOS_ENGINE], env=env)
+
+    # 4. Show the Dropdown
+    idx = get_visual_selection(apps)
+
+    if idx is not None:
+        selected = apps[idx]
+        print(f"🌌 Bridging {selected['name']}...")
+
+        try:
+            if selected["type"] == "wine":
+                # Ensure we use the full path for Wine apps
+                subprocess.Popen([WINE_CMD, selected["exec"]], env=env).wait()
+            else:
+                subprocess.Popen([selected["exec"]], env=env).wait()
+        except Exception as e:
+            os.system(f"zenity --error --text='Failed to launch {selected['name']}: {str(e)}'")
+
+    # 5. Full Cleanup on Exit
+    print("🛑 Closing Atmos Bridge...")
+    bridge_proc.terminate()
+    os.system("killall -9 wine-preloader FL64.exe 2>/dev/null")
+    print("✅ Session Ended.")
+
+if __name__ == "__main__":
+    launch_hub()

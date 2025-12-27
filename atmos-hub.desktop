@@ -1,0 +1,13 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Atmos Music Hub
+Comment=7.1 Surround Bridge for FL Studio 20
+# This 'sh' command finds the user's home and the script automatically
+Exec=python3 /run/media/john/USBSLACK/nobara-atmos-bridge/main.py
+# Standard location for the icon after cloning to home
+Icon=/run/media/john/USBSLACK/nobara-atmos-bridge/logo.png
+Path=/run/media/john/USBSLACK/nobara-atmos-bridge/
+Terminal=true
+StartupNotify=true
+Categories=AudioVideo;Audio;
