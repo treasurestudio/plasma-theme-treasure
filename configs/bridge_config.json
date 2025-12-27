@@ -2,5 +2,6 @@
     "prefix": "~/.wine",
     "path": "/home/john/nobara-atmos-bridge/src/bridge/",
     "res": "1920x1080",
-    "last_profile": "Standard"
+    "last_profile": "Standard",
+    "daw_path": "/home/john/ABLETON/Program/Live.exe"
 }
