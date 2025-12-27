@@ -1,97 +1,83 @@
 import sys
 import os
-from PyQt6.QtWidgets import (QApplication, QMainWindow, QPushButton, QVBoxLayout,
-                             QWidget, QTextEdit, QLabel, QFileDialog)
-from PyQt6.QtCore import Qt, QTimer
+import subprocess
+from PyQt6.QtWidgets import (QApplication, QMainWindow, QPushButton, QVBoxLayout, 
+                             QWidget, QTextEdit, QFileDialog, QHBoxLayout, QLabel)
+from PyQt6.QtCore import Qt
 from engine import AudioEngine
 
-class NobaraAudioHub(QMainWindow):
+class AtmosHub(QMainWindow):
     def __init__(self):
         super().__init__()
+        self.setWindowTitle("Nobara Atmos Bridge")
+        self.setFixedSize(500, 450)
+
         self.engine = AudioEngine()
-        self.init_ui()
+        self.engine.log_received.connect(self.update_log)
 
-    def init_ui(self):
-        self.setWindowTitle("NOBARA HUB | Studio Control")
-        self.setFixedSize(450, 680)
-
-        self.setStyleSheet("""
-            QMainWindow { background-color: #1e1e1e; }
-            QLabel { color: #a0a0a0; font-family: 'Segoe UI', sans-serif; font-size: 12px; }
-            QPushButton {
-                background-color: #333333; color: #eeeeee; border: 1px solid #111111;
-                padding: 12px; border-radius: 4px; font-weight: bold;
-            }
-            QPushButton:hover { background-color: #444444; }
-            QPushButton#launch { background-color: #d79921; color: #1e1e1e; font-size: 14px; }
-            QPushButton#path_btn { background-color: #262626; color: #777; font-size: 10px; padding: 5px; }
-            QTextEdit { background-color: #000000; color: #b8bb26; border: 1px solid #333; font-family: 'Monospace'; font-size: 11px; }
-        """)
-
-        central_widget = QWidget()
         layout = QVBoxLayout()
+        
+        # Header
+        self.status_label = QLabel(f"Selected: {os.path.basename(self.engine.ableton_path)}")
+        self.status_label.setStyleSheet("font-weight: bold; color: #3498db;")
+        layout.addWidget(self.status_label)
 
-        # Dynamic Hardware Status
-        self.status_led = QLabel("● SCANNING FOR HARDWARE...")
-        self.status_led.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(self.status_led)
+        # Buttons
+        btn_layout = QHBoxLayout()
+        self.btn_browse = QPushButton("📁 Select DAW (.exe)")
+        self.btn_browse.clicked.connect(self.browse_daw)
+        
+        self.btn_launch = QPushButton("🚀 Launch & Bridge")
+        self.btn_launch.clicked.connect(self.launch_all)
+        self.btn_launch.setStyleSheet("background-color: #2e7d32; color: white; font-weight: bold; height: 40px;")
+        
+        btn_layout.addWidget(self.btn_browse)
+        btn_layout.addWidget(self.btn_launch)
+        layout.addLayout(btn_layout)
 
-        # Main Controls
-        self.launch_btn = QPushButton("LAUNCH DAW ENGINE")
-        self.launch_btn.setObjectName("launch")
-        self.launch_btn.clicked.connect(self.engine.start)
-        layout.addWidget(self.launch_btn)
+        # Log View
+        self.log_view = QTextEdit()
+        self.log_view.setReadOnly(True)
+        self.log_view.setStyleSheet("background-color: #121212; color: #00ff00; font-family: monospace; border: 1px solid #333;")
+        layout.addWidget(self.log_view)
 
-        self.rescue_btn = QPushButton("FORCE RE-PATCH AUDIO")
-        self.rescue_btn.clicked.connect(self.engine.rescue_bluetooth)
-        layout.addWidget(self.rescue_btn)
+        # THE "PWEASE" FOOTER
+        self.footer_label = QLabel("✨ RUN FL STUDIO OR ABLETON! ✨")
+        self.footer_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.footer_label.setStyleSheet("color: #e67e22; font-weight: bold; font-size: 14px; margin-top: 5px;")
+        layout.addWidget(self.footer_label)
 
-        # Console Output
-        self.console = QTextEdit()
-        self.console.setReadOnly(True)
-        layout.addWidget(self.console)
+        container = QWidget()
+        container.setLayout(layout)
+        self.setCentralWidget(container)
 
-        # Configuration Section
-        layout.addWidget(QLabel("TARGET EXECUTABLE:"))
-        self.path_label = QLabel(self.engine.ableton_path)
-        self.path_label.setWordWrap(True)
-        self.path_label.setStyleSheet("color: #504945; font-style: italic;")
-        layout.addWidget(self.path_label)
+        self.update_log("READY: Select your DAW and hit Launch.")
+        self.update_log("INFO: 8-Channel Atmos Sink is prepared.")
 
-        self.path_btn = QPushButton("SELECT NEW DAW EXE")
-        self.path_btn.setObjectName("path_btn")
-        self.path_btn.clicked.connect(self.browse_path)
-        layout.addWidget(self.path_btn)
+    def browse_daw(self):
+        file_path, _ = QFileDialog.getOpenFileName(self, "Select DAW Executable", os.path.expanduser("~/.wine"), "Executables (*.exe)")
+        if file_path:
+            self.engine.save_config(file_path)
+            self.status_label.setText(f"Selected: {os.path.basename(file_path)}")
+            self.update_log(f"CONFIG: Set DAW to {file_path}")
 
-        central_widget.setLayout(layout)
-        self.setCentralWidget(central_widget)
+    def update_log(self, message):
+        self.log_view.append(message)
 
-        # Wiring Logic
-        self.engine.log_received.connect(self.console.append)
-        self.timer = QTimer()
-        self.timer.timeout.connect(self.update_status)
-        self.timer.start(3000)
-
-    def browse_path(self):
-        file_filter = "Executable (*.exe);;All Files (*)"
-        initial_dir = os.path.dirname(self.engine.ableton_path)
-        filename, _ = QFileDialog.getOpenFileName(self, "Select DAW EXE", initial_dir, file_filter)
-        if filename:
-            if self.engine.save_config(filename):
-                self.path_label.setText(filename)
-                self.console.append(f"SYSTEM: Target DAW updated to {filename}")
-
-    def update_status(self):
-        """Polls for hardware (Heavys/Headset) and updates the UI."""
-        if self.engine.check_bluetooth():
-            self.status_led.setText("● HARDWARE: READY")
-            self.status_led.setStyleSheet("color: #b8bb26; font-weight: bold; font-size: 14px;")
-        else:
-            self.status_led.setText("○ HARDWARE: NOT DETECTED")
-            self.status_led.setStyleSheet("color: #fb4934; font-weight: bold; font-size: 14px;")
+    def launch_all(self):
+        if not self.engine.isRunning():
+            self.engine.start()
+            env = os.environ.copy()
+            env["WINEASIO_NUMBER_OUTPUTS"] = "8"
+            try:
+                subprocess.Popen(["wine", self.engine.ableton_path], env=env)
+                self.update_log("SYSTEM: Launching DAW via Wine...")
+                self.update_log(">> RUN FL STUDIO OR ABLETON NOW! <<")
+            except Exception as e:
+                self.update_log(f"ERROR: Could not launch EXE: {e}")
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    window = NobaraAudioHub()
+    window = AtmosHub()
     window.show()
     sys.exit(app.exec())
