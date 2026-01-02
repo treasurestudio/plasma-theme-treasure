@@ -128,7 +128,6 @@ To fix the common "Invisible Menu" and "Skinny Window" bugs in Wine, you must cr
 Clone this repository and run the main script:
 Bash
 
-git clone https://github.com/YOUR_USERNAME/Ghost-Treasure-Studio.git
 cd Ghost-Treasure-Studio
 python3 main.py
 
